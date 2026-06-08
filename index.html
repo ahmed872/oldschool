@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vintage Radio | Wedding Invitation</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/Draggable.min.js"></script>
+    
+    <!-- خطوط كلاسيكية تشبه الآلة الكاتبة والخطوط اليدوية القديمة -->
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Great+Vibes&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --wood-dark: #2A1610;
+            --wood-light: #4A2B1E;
+            --screen-bg: #1A1A10;
+            --amber-glow: #FFB300;
+            --paper-texture: #E8DCC4;
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            background-color: #000;
+            overflow: hidden; 
+            font-family: 'Courier Prime', monospace;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* خلفية بديكور كلاسيكي واقعي */
+        .wallpaper-bg {
+            position: absolute; 
+            inset: -30px; 
+            z-index: 1; 
+            background-image: 
+                radial-gradient(circle at center, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.95) 100%),
+                url('https://images.unsplash.com/photo-1513519245088-0e12902e5a38?q=80&w=1920&auto=format&fit=crop'); 
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            filter: blur(4px) sepia(0.5) brightness(0.8);
+        }
+
+        /* جسم الراديو الخشبي */
+        .radio-body {
+            width: 90vw; max-width: 600px;
+            height: auto; aspect-ratio: 4/3;
+            background: linear-gradient(135deg, var(--wood-light), var(--wood-dark));
+            border-radius: 20px;
+            box-shadow: 
+                inset 0 0 20px rgba(0,0,0,0.8),
+                0 30px 60px rgba(0,0,0,0.9),
+                0 0 0 10px #1a0f0a;
+            position: relative;
+            z-index: 10; 
+            padding: 20px;
+            display: flex; flex-direction: column; justify-content: space-between;
+        }
+
+        /* أنيميشن اللمبة الحمراء */
+        @keyframes blink-red {
+            0%, 100% { opacity: 1; box-shadow: 0 0 15px 2px rgba(255, 0, 0, 0.9); background-color: #ff2222; }
+            50% { opacity: 0.3; box-shadow: 0 0 2px 0px rgba(255, 0, 0, 0.5); background-color: #880000; }
+        }
+        .status-light {
+            animation: blink-red 2s infinite ease-in-out;
+        }
+
+        /* شبكة السماعات القديمة */
+        .speaker-grill {
+            background-image: radial-gradient(#111 20%, transparent 20%), radial-gradient(#111 20%, transparent 20%);
+            background-position: 0 0, 4px 4px;
+            background-size: 8px 8px;
+            background-color: #2c1a11;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+        }
+
+        /* الشاشة الزجاجية للراديو */
+        .radio-screen {
+            background-color: var(--screen-bg);
+            border: 4px solid #111;
+            border-radius: 10px;
+            box-shadow: inset 0 0 20px rgba(255, 179, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* تأثير خطوط الشاشة القديمة */
+        .scanlines {
+            position: absolute; inset: 0; z-index: 10;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1));
+            background-size: 100% 4px;
+            pointer-events: none;
+        }
+
+        /* توهج النص */
+        .amber-text {
+            color: var(--amber-glow);
+            text-shadow: 0 0 5px var(--amber-glow), 0 0 10px var(--amber-glow);
+        }
+
+        .font-cursive { font-family: 'Great Vibes', cursive; }
+
+        /* بكرات الراديو */
+        .knob {
+            width: 60px; height: 60px;
+            background: radial-gradient(circle at 30% 30%, #555, #111);
+            border-radius: 50%;
+            border: 2px solid #000;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.6), inset 0 0 5px rgba(255,255,255,0.2);
+            position: relative; cursor: pointer;
+        }
+        .knob-marker {
+            position: absolute; top: 5px; left: 50%;
+            transform: translateX(-50%);
+            width: 4px; height: 12px;
+            background-color: #fff; border-radius: 2px;
+        }
+
+        /* مؤشر التردد (الإبرة) */
+        .tuning-needle {
+            position: absolute; top: 0; bottom: 0; left: 10%;
+            width: 2px; background-color: #ff3300;
+            box-shadow: 0 0 5px #ff3300;
+            z-index: 5;
+        }
+
+        /* شاشة البداية */
+        #start-overlay {
+            position: fixed; inset: 0; z-index: 50; 
+            background: rgba(0,0,0,0.95);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: var(--paper-texture);
+        }
+
+        .station-content { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; }
+        .station-active { opacity: 1; z-index: 2; }
+    </style>
+</head>
+
+<body>
+    <div class="wallpaper-bg"></div>
+
+    <div id="start-overlay">
+        <h1 class="font-cursive text-5xl md:text-7xl mb-6 text-[#E8DCC4]">Tune In To Love</h1>
+        <button id="power-btn" class="px-8 py-3 border border-[#E8DCC4] text-[#E8DCC4] hover:bg-[#E8DCC4] hover:text-black transition-all tracking-widest uppercase text-sm">
+            Turn On Radio
+        </button>
+    </div>
+
+    <div class="radio-body opacity-50 scale-95" id="radio-system">
+        
+        <!-- اللمبة الحمراء التي تنبض -->
+        <div class="absolute top-6 right-6 w-3 h-3 rounded-full border border-black status-light z-20"></div>
+        
+        <div class="w-full h-1/4 speaker-grill rounded-md mb-4 flex items-center justify-center">
+            <div class="w-16 h-16 rounded-full border-4 border-[#111] opacity-30"></div>
+        </div>
+
+        <div class="w-full h-1/2 radio-screen relative flex items-center p-4">
+            <div class="scanlines"></div>
+            
+            <div class="absolute top-2 w-full flex justify-between text-[10px] text-gray-600 px-6 font-bold">
+                <span>88</span><span>92</span><span>96</span><span>100</span><span>104</span><span>108</span>
+            </div>
+            
+            <div class="tuning-needle" id="needle"></div>
+
+            <div class="station-content station-active w-full text-center" id="station-1">
+                <p class="text-xs text-gray-500 tracking-[0.3em] mb-2 uppercase">Frequency of Love</p>
+                <h2 class="font-cursive text-4xl md:text-6xl amber-text" id="groom-name">Ahmed</h2>
+                <span class="text-xl amber-text mx-4 opacity-50">&</span>
+                <h2 class="font-cursive text-4xl md:text-6xl amber-text" id="bride-name">Noura</h2>
+            </div>
+
+            <div class="station-content w-full text-center" id="station-2">
+                <p class="text-[10px] text-gray-500 tracking-widest mb-2 uppercase">Transmission Time</p>
+                <p class="text-xl md:text-2xl amber-text font-bold tracking-widest">03 . 07 . 2026</p>
+                <p class="text-sm amber-text mt-2">7:30 PM</p>
+            </div>
+
+            <div class="station-content w-full text-center" id="station-3">
+                <p class="text-[10px] text-gray-500 tracking-widest mb-2 uppercase">Broadcast Location</p>
+                <p class="text-lg md:text-xl amber-text">The Grand Ballroom</p>
+                <!-- تغيير زر التليجرام إلى زر الموقع -->
+                <a href="https://maps.google.com" target="_blank" class="mt-4 px-4 py-2 border border-[#FFB300] amber-text text-xs tracking-widest hover:bg-[#FFB300] hover:text-[#111] transition-colors inline-block z-20 relative">Open Location</a>
+            </div>
+        </div>
+
+        <div class="w-full h-1/4 mt-4 flex justify-between items-end px-4">
+            <div class="text-center">
+                <div class="knob" id="volume-knob"><div class="knob-marker"></div></div>
+                <p class="text-[#E8DCC4] text-[10px] mt-2 tracking-widest">VOLUME</p>
+            </div>
+            
+            <div class="text-center">
+                <div class="text-[#E8DCC4] text-xs font-serif italic mb-2 opacity-70">"The Premiere"</div>
+                <div class="w-20 h-1 bg-[#111] mx-auto rounded"></div>
+            </div>
+
+            <div class="text-center">
+                <div class="knob" id="tuning-knob"><div class="knob-marker"></div></div>
+                <p class="text-[#E8DCC4] text-[10px] mt-2 tracking-widest">TUNE</p>
+            </div>
+        </div>
+    </div>
+
+  <audio id="vintage-audio" loop>
+        <source src="music/Video Project 2.m4a" type="audio/mp4">
+    </audio>
+    <audio id="static-audio" loop>
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-radio-static-hiss-1361.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        // --- تهيئة مكتبة GSAP للـ Draggable ---
+        gsap.registerPlugin(Draggable);
+
+        // --- تعريف العناصر من الـ DOM ---
+        const powerBtn = document.getElementById('power-btn');
+        const startOverlay = document.getElementById('start-overlay');
+        const radioSystem = document.getElementById('radio-system');
+        const vintageAudio = document.getElementById('vintage-audio');
+        const staticAudio = document.getElementById('static-audio');
+        const needle = document.getElementById('needle');
+        
+        // المحطات (تفاصيل الدعوة)
+        const stations = [
+            document.getElementById('station-1'), // العرسان
+            document.getElementById('station-2'), // الموعد
+            document.getElementById('station-3')  // المكان
+        ];
+
+        let currentStation = 0;
+
+        // --- 1. زر تشغيل الراديو (Power) ---
+        powerBtn.addEventListener('click', () => {
+            // تشغيل الأصوات
+            vintageAudio.volume = 0.8;
+            staticAudio.volume = 0.15; // رفع مستوى الوش ليكون مسموعاً دائماً في الخلفية
+            vintageAudio.play().catch(e => console.log("Audio play prevented"));
+            staticAudio.play().catch(e => console.log("Audio play prevented"));
+
+            // إخفاء شاشة البداية بتأثير Fade out
+            gsap.to(startOverlay, { 
+                opacity: 0, 
+                duration: 1, 
+                onComplete: () => startOverlay.style.display = 'none' 
+            });
+            
+            // تكبير الراديو وإظهاره (Pop-in effect)
+            gsap.to(radioSystem, { 
+                opacity: 1, 
+                scale: 1, 
+                duration: 1.5, 
+                ease: "back.out(1.2)" 
+            });
+        });
+
+        // --- 2. بكرة البحث عن المحطات (Tuning Knob) ---
+        Draggable.create("#tuning-knob", {
+            type: "rotation",
+            bounds: { minRotation: 0, maxRotation: 360 }, // لفة كاملة
+            onDrag: function() {
+                // حساب النسبة المئوية للفة (من 0 إلى 1)
+                let progress = this.rotation / 360;
+                
+                // تحريك الإبرة الحمراء (من 10% إلى 90% من عرض الشاشة)
+                let needlePos = 10 + (progress * 80);
+                gsap.set(needle, { left: `${needlePos}%` });
+
+                // تحديد المحطة النشطة بناءً على موضع الإبرة
+                let newStation;
+                if (progress < 0.33) newStation = 0;
+                else if (progress < 0.66) newStation = 1;
+                else newStation = 2;
+
+                // لو اتغيرت المحطة، نفذ تأثير الشوشرة والتبديل
+                if (newStation !== currentStation) {
+                    // رفع صوت الشوشرة للحظة وخفض الموسيقى (إحساس تقليب الراديو الحقيقي)
+                    gsap.to(staticAudio, { volume: 0.6, duration: 0.2, yoyo: true, repeat: 1 });
+                    gsap.to(vintageAudio, { volume: 0.3, duration: 0.2, yoyo: true, repeat: 1 });
+                    
+                    // إخفاء المحطة القديمة وإظهار الجديدة
+                    gsap.to(stations[currentStation], { opacity: 0, zIndex: 1, duration: 0.3 });
+                    gsap.to(stations[newStation], { opacity: 1, zIndex: 2, duration: 0.3, delay: 0.2 });
+                    
+                    currentStation = newStation;
+                }
+            }
+        });
+
+        // --- 3. بكرة مستوى الصوت (Volume Knob) ---
+       // --- 3. بكرة مستوى الصوت (Volume Knob) ---
+        Draggable.create("#volume-knob", {
+            type: "rotation",
+            bounds: { minRotation: 0, maxRotation: 270 },
+            onDrag: function() {
+                // حساب النسبة (من 0 لـ 1) بناءً على دوران البكرة
+                let volProgress = this.rotation / 270;
+                
+                // ربط النسبة بمستوى صوت الأغنية والوش (static)
+                // الأغنية تعلى لما نلف، والوش يقل لما نلف (عشان الواقعية)
+                vintageAudio.volume = volProgress;
+                staticAudio.volume = Math.max(0, 0.3 - (volProgress * 0.2)); 
+            }
+        });
+        
+        // ضبط البكرة في البداية لتكون على صوت عالي
+        gsap.set("#volume-knob", { rotation: 200 });
+        vintageAudio.volume = 200 / 270; // ضبط الصوت الأولي
+        
+    </script>
+</body>
+</html>
