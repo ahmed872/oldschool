@@ -21,6 +21,7 @@ async function init() {
   renderCategorySelect();
   renderCart();
   populateSettingsForm();
+  updateLowStockBadge();
   await refreshSalesTable();
   await refreshProductsTable();
 
@@ -31,10 +32,29 @@ async function init() {
   setupReportsHandlers();
   setupUsersHandlers();
   setupBackupHandlers();
+  setupLogoHandlers();
+  setupDayCloseHandlers();
 
   const today = new Date().toISOString().slice(0, 10);
   document.getElementById('reportFrom').value = today;
   document.getElementById('reportTo').value = today;
+  document.getElementById('dayCloseDate').value = today;
+}
+
+function isLowStock(product) {
+  const threshold = Number(settings.low_stock_threshold) || 5;
+  return product.track_stock && product.stock_qty <= threshold;
+}
+
+function updateLowStockBadge() {
+  const lowStockItems = products.filter(isLowStock);
+  const badge = document.getElementById('lowStockBadge');
+  if (lowStockItems.length === 0) {
+    badge.style.display = 'none';
+    return;
+  }
+  badge.style.display = 'block';
+  badge.textContent = `⚠ ${lowStockItems.length} صنف مخزونه منخفض`;
 }
 
 function applyRoleVisibility() {
@@ -90,12 +110,12 @@ function renderProductGrid() {
 
     for (const p of items) {
       const card = document.createElement('div');
-      card.className = 'product-card';
+      card.className = 'product-card' + (isLowStock(p) ? ' low-stock' : '');
       const stockLabel = p.track_stock ? `${p.stock_qty} بالمخزون` : 'غير محدود';
       card.innerHTML = `
         <div class="name">${escapeHtml(p.name)}</div>
         <div class="price">${p.price.toFixed(2)} ${settings.currency || ''}</div>
-        <div class="stock">${stockLabel}</div>
+        <div class="stock">${isLowStock(p) ? '⚠ ' : ''}${stockLabel}</div>
       `;
       card.addEventListener('click', () => addToCart(p));
       grid.appendChild(card);
@@ -214,6 +234,7 @@ function setupPosHandlers() {
     renderCart();
     products = await window.api.products.list();
     renderProductGrid();
+    updateLowStockBadge();
     await refreshSalesTable();
 
     const wantsPrint = confirm(`تم إتمام البيع - فاتورة رقم ${result.saleNumber} بإجمالي ${result.total.toFixed(2)}\n\nهل تريد طباعة الفاتورة؟`);
@@ -300,6 +321,7 @@ async function showSaleDetail(saleId) {
         showSaleDetail(saleIdVal);
         products = await window.api.products.list();
         renderProductGrid();
+        updateLowStockBadge();
       } catch (err) {
         alert(err.message);
       }
@@ -310,11 +332,11 @@ async function showSaleDetail(saleId) {
 async function refreshProductsTable() {
   const body = document.getElementById('productsTableBody');
   body.innerHTML = products.map((p) => `
-    <tr>
+    <tr${isLowStock(p) ? ' style="background:#fef3c7;"' : ''}>
       <td>${escapeHtml(p.name)}</td>
       <td>${escapeHtml(p.category_name || '-')}</td>
       <td>${p.price.toFixed(2)}</td>
-      <td>${p.track_stock ? p.stock_qty : '—'}</td>
+      <td>${isLowStock(p) ? '⚠ ' : ''}${p.track_stock ? p.stock_qty : '—'}</td>
       <td>
         <button class="secondary" data-edit="${p.id}">تعديل</button>
         <button class="secondary" data-delete="${p.id}">حذف</button>
@@ -326,6 +348,7 @@ async function refreshProductsTable() {
       await window.api.products.delete(Number(btn.dataset.delete));
       products = await window.api.products.list();
       renderProductGrid();
+      updateLowStockBadge();
       await refreshProductsTable();
     });
   });
@@ -381,6 +404,7 @@ function setupProductHandlers() {
     resetProductForm();
     products = await window.api.products.list();
     renderProductGrid();
+    updateLowStockBadge();
     await refreshProductsTable();
   });
 
@@ -393,6 +417,12 @@ function populateSettingsForm() {
   document.getElementById('sTax').value = settings.tax_percent || 0;
   document.getElementById('sReceiptWidth').value = settings.receipt_width_mm || 58;
   document.getElementById('sInvoiceReset').value = settings.invoice_reset_period || 'monthly';
+  document.getElementById('sLowStock').value = settings.low_stock_threshold || 5;
+
+  const logoPreviewBox = document.getElementById('logoPreviewBox');
+  logoPreviewBox.innerHTML = settings.logo_data_url
+    ? `<img src="${settings.logo_data_url}" style="max-height:70px;" />`
+    : '<span style="color:var(--text-dim);font-size:13px;">لا يوجد شعار مرفوع حاليًا</span>';
 }
 
 function setupSettingsHandlers() {
@@ -402,8 +432,10 @@ function setupSettingsHandlers() {
     await window.api.settings.save('tax_percent', document.getElementById('sTax').value);
     await window.api.settings.save('receipt_width_mm', document.getElementById('sReceiptWidth').value);
     await window.api.settings.save('invoice_reset_period', document.getElementById('sInvoiceReset').value);
+    await window.api.settings.save('low_stock_threshold', document.getElementById('sLowStock').value);
     settings = await window.api.settings.get();
     renderProductGrid();
+    updateLowStockBadge();
     alert('تم حفظ الإعدادات');
   });
 
@@ -515,6 +547,60 @@ async function setupBackupHandlers() {
 
   document.getElementById('restoreBackupBtn').addEventListener('click', async () => {
     await window.api.backup.restore();
+  });
+}
+
+function setupLogoHandlers() {
+  const fileInput = document.getElementById('logoFileInput');
+  const previewBox = document.getElementById('logoPreviewBox');
+  let pendingDataUrl = null;
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      pendingDataUrl = reader.result;
+      previewBox.innerHTML = `<img src="${pendingDataUrl}" style="max-height:70px;" />`;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById('saveLogoBtn').addEventListener('click', async () => {
+    if (!pendingDataUrl) { alert('اختر صورة الشعار أولاً'); return; }
+    await window.api.settings.save('logo_data_url', pendingDataUrl);
+    settings = await window.api.settings.get();
+    alert('تم حفظ الشعار');
+  });
+}
+
+function setupDayCloseHandlers() {
+  document.getElementById('loadDayCloseBtn').addEventListener('click', async () => {
+    const date = document.getElementById('dayCloseDate').value;
+    if (!date) { alert('اختر التاريخ أولاً'); return; }
+    const closing = await window.api.reports.dailyClosing(date);
+    const currency = settings.currency || '';
+    document.getElementById('dayCloseResults').innerHTML = `
+      <div class="card-box" style="max-width:500px;">
+        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;"><span>عدد الفواتير</span><span>${closing.invoiceCount}</span></div>
+        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;"><span>مبيعات نقدًا</span><span>${closing.cash.toFixed(2)} ${currency}</span></div>
+        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;"><span>مبيعات بطاقة</span><span>${closing.card.toFixed(2)} ${currency}</span></div>
+        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;"><span>الخصومات</span><span>${closing.discount.toFixed(2)} ${currency}</span></div>
+        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;"><span>الضريبة</span><span>${closing.tax.toFixed(2)} ${currency}</span></div>
+        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;"><span>المرتجعات</span><span>${closing.returns.toFixed(2)} ${currency}</span></div>
+        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;font-weight:bold;color:var(--accent);"><span>الصافي</span><span>${closing.netTotal.toFixed(2)} ${currency}</span></div>
+      </div>
+    `;
+  });
+
+  document.getElementById('printDayCloseBtn').addEventListener('click', async () => {
+    const date = document.getElementById('dayCloseDate').value;
+    if (!date) { alert('اختر التاريخ أولاً'); return; }
+    try {
+      await window.api.print.dayClose(date);
+    } catch (err) {
+      alert('تعذرت الطباعة: ' + err.message);
+    }
   });
 }
 

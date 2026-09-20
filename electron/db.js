@@ -152,6 +152,10 @@ const hasResetPeriod = db.prepare("SELECT 1 FROM settings WHERE key = 'invoice_r
 if (!hasResetPeriod) {
   db.prepare("INSERT INTO settings (key, value) VALUES ('invoice_reset_period', 'monthly')").run();
 }
+const hasLowStockThreshold = db.prepare("SELECT 1 FROM settings WHERE key = 'low_stock_threshold'").get();
+if (!hasLowStockThreshold) {
+  db.prepare("INSERT INTO settings (key, value) VALUES ('low_stock_threshold', '5')").run();
+}
 
 function isoWeekKey(date) {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -452,6 +456,45 @@ module.exports = {
       totalDiscount: totals.total_discount,
       totalTax: totals.total_tax,
       topProducts,
+    };
+  },
+
+  getDailyClosing(date) {
+    const range = { from: `${date} 00:00:00`, to: `${date} 23:59:59` };
+
+    const byPayment = db.prepare(`
+      SELECT payment_method, COALESCE(SUM(total), 0) AS total, COUNT(*) AS cnt
+      FROM sales
+      WHERE created_at BETWEEN ? AND ?
+      GROUP BY payment_method
+    `).all(range.from, range.to);
+
+    const cash = byPayment.find((p) => p.payment_method === 'cash')?.total || 0;
+    const card = byPayment.find((p) => p.payment_method === 'card')?.total || 0;
+    const invoiceCount = byPayment.reduce((sum, p) => sum + p.cnt, 0);
+
+    const totals = db.prepare(`
+      SELECT COALESCE(SUM(discount), 0) AS discount, COALESCE(SUM(tax), 0) AS tax, COALESCE(SUM(total), 0) AS total
+      FROM sales
+      WHERE created_at BETWEEN ? AND ?
+    `).get(range.from, range.to);
+
+    const returns = db.prepare(`
+      SELECT COALESCE(SUM(refunded_amount), 0) AS amount
+      FROM returns
+      WHERE created_at BETWEEN ? AND ?
+    `).get(range.from, range.to);
+
+    return {
+      date,
+      invoiceCount,
+      cash,
+      card,
+      grossTotal: totals.total,
+      discount: totals.discount,
+      tax: totals.tax,
+      returns: returns.amount,
+      netTotal: totals.total - returns.amount,
     };
   },
 

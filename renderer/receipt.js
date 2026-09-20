@@ -32,6 +32,7 @@ async function render() {
   const qrDataUrl = await window.api.print.qr(sale.sale_number);
 
   container.innerHTML = `
+    ${settings.logo_data_url ? `<div class="qr-box"><img src="${settings.logo_data_url}" style="width:auto;height:60px;" /></div>` : ''}
     <h2>${escapeHtml(settings.store_name || 'المتجر')}</h2>
     <p class="center">فاتورة رقم: ${escapeHtml(sale.sale_number)}</p>
     <p class="center">${escapeHtml(sale.created_at)}</p>

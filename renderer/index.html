@@ -12,10 +12,12 @@
       <button class="nav-btn active" data-view="pos">نقطة البيع</button>
       <button class="nav-btn" data-view="products">المنتجات</button>
       <button class="nav-btn" data-view="sales">سجل المبيعات</button>
+      <button class="nav-btn" data-view="dayclose">إغلاق اليوم</button>
       <button class="nav-btn admin-only" data-view="reports">التقارير</button>
       <button class="nav-btn admin-only" data-view="users">الموظفون</button>
       <button class="nav-btn admin-only" data-view="settings">الإعدادات</button>
       <button class="nav-btn" id="openKitchenBtn">شاشة المطبخ ⤴</button>
+      <div id="lowStockBadge" style="display:none;background:#fef3c7;color:#92400e;font-size:12px;padding:8px;border-radius:8px;margin-top:8px;"></div>
       <div style="flex:1;"></div>
       <div id="userBadge" style="color:var(--text-dim);font-size:13px;margin-bottom:6px;"></div>
       <button class="nav-btn" id="logoutBtn">تسجيل الخروج</button>
@@ -84,6 +86,17 @@
         <div id="saleDetailBox" class="card-box" style="display:none;max-width:700px;"></div>
       </section>
 
+      <!-- Day Close View -->
+      <section class="view" id="view-dayclose">
+        <h2>إغلاق اليوم</h2>
+        <div class="card-box" style="max-width:500px;">
+          <div class="form-row"><label>التاريخ</label><input id="dayCloseDate" type="date" /></div>
+          <button class="secondary" id="loadDayCloseBtn">عرض</button>
+          <button class="primary" id="printDayCloseBtn" style="margin-top:8px;">طباعة تقرير الإغلاق</button>
+        </div>
+        <div id="dayCloseResults"></div>
+      </section>
+
       <!-- Reports View -->
       <section class="view" id="view-reports">
         <h2>التقارير</h2>
@@ -136,7 +149,15 @@
               <option value="never">بدون تصفير</option>
             </select>
           </div>
+          <div class="form-row"><label>حد تنبيه المخزون المنخفض</label><input id="sLowStock" type="number" step="1" min="0" /></div>
           <button class="primary" id="saveSettingsBtn">حفظ الإعدادات</button>
+        </div>
+        <div class="card-box">
+          <h3>شعار الجهة</h3>
+          <div id="logoPreviewBox" style="margin-bottom:10px;"></div>
+          <div class="form-row"><input id="logoFileInput" type="file" accept="image/*" /></div>
+          <button class="secondary" id="saveLogoBtn">حفظ الشعار</button>
+          <p style="color:var(--text-dim);font-size:12px;margin-top:8px;">الشعار هيظهر تلقائيًا فوق الفاتورة وتقرير الإغلاق وتقرير الـ PDF.</p>
         </div>
         <div class="card-box">
           <h3>إضافة فئة جديدة</h3>

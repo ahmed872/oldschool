@@ -69,6 +69,31 @@ function printReceipt(saleId) {
   });
 }
 
+function printDayClose(date) {
+  return new Promise((resolve, reject) => {
+    const closeWindow = new BrowserWindow({
+      width: 380,
+      height: 600,
+      show: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+    closeWindow.loadFile(path.join(__dirname, '..', 'renderer', 'day-close.html'), {
+      query: { date },
+    });
+    closeWindow.webContents.on('did-finish-load', () => {
+      closeWindow.webContents.print({ silent: false }, (success, reason) => {
+        closeWindow.close();
+        if (success) resolve(true);
+        else reject(new Error(reason || 'تم إلغاء الطباعة'));
+      });
+    });
+  });
+}
+
 async function exportReportPdf(fromDate, toDate) {
   const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
     title: 'حفظ التقرير كـ PDF',
@@ -235,6 +260,7 @@ function registerIpcHandlers() {
   ipcMain.handle('reports:detailRows', (_e, fromDate, toDate) => store.getSalesDetailRows(fromDate, toDate));
   ipcMain.handle('reports:exportPdf', (_e, fromDate, toDate) => exportReportPdf(fromDate, toDate));
   ipcMain.handle('reports:exportExcel', (_e, fromDate, toDate) => exportReportExcel(fromDate, toDate));
+  ipcMain.handle('reports:dailyClosing', (_e, date) => store.getDailyClosing(date));
 
   ipcMain.handle('settings:get', () => store.getSettings());
   ipcMain.handle('settings:save', (_e, key, value) => store.saveSetting(key, value));
@@ -244,6 +270,7 @@ function registerIpcHandlers() {
   ipcMain.handle('backup:currentPath', () => store.dbPath);
 
   ipcMain.handle('print:receipt', (_e, saleId) => printReceipt(saleId));
+  ipcMain.handle('print:dayClose', (_e, date) => printDayClose(date));
   ipcMain.handle('print:qr', (_e, text) => QRCode.toDataURL(text, { margin: 0, width: 140 }));
 
   ipcMain.handle('nav:goToApp', () => {

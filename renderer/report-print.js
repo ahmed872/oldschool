@@ -19,6 +19,7 @@ async function render() {
   const container = document.getElementById('report');
 
   container.innerHTML = `
+    ${settings.logo_data_url ? `<div style="text-align:center;margin-bottom:6px;"><img src="${settings.logo_data_url}" style="max-height:70px;" /></div>` : ''}
     <h1>${escapeHtml(settings.store_name || '')}</h1>
     <p class="sub">تقرير المبيعات من ${escapeHtml(from)} إلى ${escapeHtml(to)}</p>
 
