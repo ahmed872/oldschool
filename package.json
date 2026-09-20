@@ -21,6 +21,7 @@
   "build": {
     "appId": "com.smartpos.desktop",
     "productName": "Smart POS",
+    "publish": null,
     "directories": {
       "output": "dist"
     },
