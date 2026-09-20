@@ -3,6 +3,7 @@ let products = [];
 let cart = []; // { product_id, name, qty, unit_price, is_kitchen_item }
 let settings = {};
 let currentUser = null;
+let editingProductId = null;
 
 async function init() {
   currentUser = await window.api.auth.me();
@@ -173,6 +174,20 @@ function updateTotals() {
 function setupPosHandlers() {
   document.getElementById('discountInput').addEventListener('input', updateTotals);
 
+  const barcodeInput = document.getElementById('barcodeInput');
+  barcodeInput.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const code = barcodeInput.value.trim();
+    barcodeInput.value = '';
+    if (!code) return;
+    const product = products.find((p) => p.barcode === code);
+    if (!product) {
+      alert('لا يوجد منتج بهذا الباركود: ' + code);
+      return;
+    }
+    addToCart(product);
+  });
+
   document.getElementById('clearCartBtn').addEventListener('click', () => {
     cart = [];
     renderCart();
@@ -300,7 +315,10 @@ async function refreshProductsTable() {
       <td>${escapeHtml(p.category_name || '-')}</td>
       <td>${p.price.toFixed(2)}</td>
       <td>${p.track_stock ? p.stock_qty : '—'}</td>
-      <td><button class="secondary" data-delete="${p.id}">حذف</button></td>
+      <td>
+        <button class="secondary" data-edit="${p.id}">تعديل</button>
+        <button class="secondary" data-delete="${p.id}">حذف</button>
+      </td>
     </tr>
   `).join('');
   body.querySelectorAll('[data-delete]').forEach((btn) => {
@@ -311,6 +329,39 @@ async function refreshProductsTable() {
       await refreshProductsTable();
     });
   });
+  body.querySelectorAll('[data-edit]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const product = products.find((p) => p.id === Number(btn.dataset.edit));
+      if (product) loadProductIntoForm(product);
+    });
+  });
+}
+
+function loadProductIntoForm(product) {
+  editingProductId = product.id;
+  document.getElementById('productFormTitle').textContent = 'تعديل: ' + product.name;
+  document.getElementById('pName').value = product.name;
+  document.getElementById('pBarcode').value = product.barcode || '';
+  document.getElementById('pCategory').value = product.category_id || '';
+  document.getElementById('pPrice').value = product.price;
+  document.getElementById('pCost').value = product.cost;
+  document.getElementById('pStock').value = product.stock_qty;
+  document.getElementById('pTrackStock').checked = !!product.track_stock;
+  document.getElementById('cancelEditBtn').style.display = 'block';
+  document.getElementById('view-products').scrollIntoView({ behavior: 'smooth' });
+}
+
+function resetProductForm() {
+  editingProductId = null;
+  document.getElementById('productFormTitle').textContent = 'إضافة منتج جديد';
+  document.getElementById('pName').value = '';
+  document.getElementById('pBarcode').value = '';
+  document.getElementById('pCategory').value = '';
+  document.getElementById('pPrice').value = '';
+  document.getElementById('pCost').value = '';
+  document.getElementById('pStock').value = '';
+  document.getElementById('pTrackStock').checked = false;
+  document.getElementById('cancelEditBtn').style.display = 'none';
 }
 
 function setupProductHandlers() {
@@ -318,6 +369,7 @@ function setupProductHandlers() {
     const name = document.getElementById('pName').value.trim();
     if (!name) { alert('اسم المنتج مطلوب'); return; }
     await window.api.products.save({
+      id: editingProductId,
       name,
       barcode: document.getElementById('pBarcode').value.trim(),
       category_id: Number(document.getElementById('pCategory').value) || null,
@@ -326,15 +378,13 @@ function setupProductHandlers() {
       stock_qty: Number(document.getElementById('pStock').value) || 0,
       track_stock: document.getElementById('pTrackStock').checked,
     });
-    document.getElementById('pName').value = '';
-    document.getElementById('pBarcode').value = '';
-    document.getElementById('pPrice').value = '';
-    document.getElementById('pCost').value = '';
-    document.getElementById('pStock').value = '';
+    resetProductForm();
     products = await window.api.products.list();
     renderProductGrid();
     await refreshProductsTable();
   });
+
+  document.getElementById('cancelEditBtn').addEventListener('click', resetProductForm);
 }
 
 function populateSettingsForm() {
@@ -342,6 +392,7 @@ function populateSettingsForm() {
   document.getElementById('sCurrency').value = settings.currency || '';
   document.getElementById('sTax').value = settings.tax_percent || 0;
   document.getElementById('sReceiptWidth').value = settings.receipt_width_mm || 58;
+  document.getElementById('sInvoiceReset').value = settings.invoice_reset_period || 'monthly';
 }
 
 function setupSettingsHandlers() {
@@ -350,6 +401,7 @@ function setupSettingsHandlers() {
     await window.api.settings.save('currency', document.getElementById('sCurrency').value);
     await window.api.settings.save('tax_percent', document.getElementById('sTax').value);
     await window.api.settings.save('receipt_width_mm', document.getElementById('sReceiptWidth').value);
+    await window.api.settings.save('invoice_reset_period', document.getElementById('sInvoiceReset').value);
     settings = await window.api.settings.get();
     renderProductGrid();
     alert('تم حفظ الإعدادات');
@@ -381,7 +433,7 @@ function setupReportsHandlers() {
         <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;"><span>إجمالي المرتجعات</span><span>${summary.totalReturns.toFixed(2)} ${currency}</span></div>
         <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;"><span>صافي المبيعات</span><span>${summary.netSales.toFixed(2)} ${currency}</span></div>
         <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;"><span>التكلفة</span><span>${summary.totalCost.toFixed(2)} ${currency}</span></div>
-        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;font-weight:bold;color:#22c55e;"><span>صافي الربح</span><span>${summary.profit.toFixed(2)} ${currency}</span></div>
+        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;font-weight:bold;color:var(--accent);"><span>صافي الربح</span><span>${summary.profit.toFixed(2)} ${currency}</span></div>
       </div>
       <h3>الأكثر مبيعًا</h3>
       <table>

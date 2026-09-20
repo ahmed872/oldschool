@@ -2,7 +2,7 @@ async function loadOrders() {
   const orders = await window.api.kitchen.list();
   const container = document.getElementById('orders');
   if (orders.length === 0) {
-    container.innerHTML = '<p style="color:#94a3b8;">لا توجد طلبات حاليًا</p>';
+    container.innerHTML = '<p style="color:var(--text-dim);">لا توجد طلبات حاليًا</p>';
     return;
   }
   container.innerHTML = orders.map((o) => `

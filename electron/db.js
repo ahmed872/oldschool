@@ -148,11 +148,34 @@ const hasReceiptWidth = db.prepare("SELECT 1 FROM settings WHERE key = 'receipt_
 if (!hasReceiptWidth) {
   db.prepare("INSERT INTO settings (key, value) VALUES ('receipt_width_mm', '58')").run();
 }
+const hasResetPeriod = db.prepare("SELECT 1 FROM settings WHERE key = 'invoice_reset_period'").get();
+if (!hasResetPeriod) {
+  db.prepare("INSERT INTO settings (key, value) VALUES ('invoice_reset_period', 'monthly')").run();
+}
+
+function isoWeekKey(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}W${String(weekNo).padStart(2, '0')}`;
+}
+
+function currentPeriodKey() {
+  const setting = db.prepare("SELECT value FROM settings WHERE key = 'invoice_reset_period'").get();
+  const period = setting ? setting.value : 'monthly';
+  const now = new Date();
+  if (period === 'weekly') return isoWeekKey(now);
+  if (period === 'monthly') return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+  return null;
+}
 
 function nextSaleNumber() {
-  const row = db.prepare(`SELECT sale_number FROM sales ORDER BY id DESC LIMIT 1`).get();
-  const lastNum = row ? parseInt(row.sale_number.replace(/\D/g, ''), 10) || 0 : 0;
-  return 'INV-' + String(lastNum + 1).padStart(6, '0');
+  const periodKey = currentPeriodKey();
+  const prefix = periodKey ? `INV-${periodKey}-` : 'INV-';
+  const row = db.prepare(`SELECT sale_number FROM sales WHERE sale_number LIKE ? ORDER BY id DESC LIMIT 1`).get(prefix + '%');
+  const lastNum = row ? parseInt(row.sale_number.slice(prefix.length), 10) || 0 : 0;
+  return prefix + String(lastNum + 1).padStart(6, '0');
 }
 
 module.exports = {
@@ -207,10 +230,10 @@ module.exports = {
   saveProduct(product) {
     if (product.id) {
       db.prepare(`
-        UPDATE products SET name=?, barcode=?, category_id=?, price=?, cost=?, track_stock=?
+        UPDATE products SET name=?, barcode=?, category_id=?, price=?, cost=?, stock_qty=?, track_stock=?
         WHERE id=?
       `).run(product.name, product.barcode || null, product.category_id || null,
-        product.price, product.cost || 0, product.track_stock ? 1 : 0, product.id);
+        product.price, product.cost || 0, product.stock_qty || 0, product.track_stock ? 1 : 0, product.id);
       return product.id;
     }
     const info = db.prepare(`
