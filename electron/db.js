@@ -2,6 +2,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { app } = require('electron');
 const Database = require('better-sqlite3');
+const DEFAULT_LOGO_DATA_URL = require('./default-logo.js');
 
 const dbDir = app.getPath('userData');
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
@@ -128,6 +129,7 @@ function seedIfEmpty() {
     insertSetting.run('currency', 'ج.م');
     insertSetting.run('tax_percent', '0');
     insertSetting.run('receipt_width_mm', '58');
+    insertSetting.run('logo_data_url', DEFAULT_LOGO_DATA_URL);
   }
 
   const userCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
@@ -155,6 +157,10 @@ if (!hasResetPeriod) {
 const hasLowStockThreshold = db.prepare("SELECT 1 FROM settings WHERE key = 'low_stock_threshold'").get();
 if (!hasLowStockThreshold) {
   db.prepare("INSERT INTO settings (key, value) VALUES ('low_stock_threshold', '5')").run();
+}
+const hasLogo = db.prepare("SELECT 1 FROM settings WHERE key = 'logo_data_url'").get();
+if (!hasLogo) {
+  db.prepare("INSERT INTO settings (key, value) VALUES ('logo_data_url', ?)").run(DEFAULT_LOGO_DATA_URL);
 }
 
 function isoWeekKey(date) {
@@ -267,6 +273,7 @@ module.exports = {
     const hasKitchenItems = items.some((it) => it.is_kitchen_item);
 
     const getProductCost = db.prepare('SELECT cost FROM products WHERE id = ?');
+    const getProductStock = db.prepare('SELECT stock_qty, track_stock, name FROM products WHERE id = ?');
     const insertSale = db.prepare(`
       INSERT INTO sales (sale_number, user_id, customer_id, subtotal, discount, tax, total, payment_method, kitchen_status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -291,6 +298,13 @@ module.exports = {
       ).lastInsertRowid;
 
       for (const it of items) {
+        if (it.product_id) {
+          const current = getProductStock.get(it.product_id);
+          if (current && current.track_stock && current.stock_qty < it.qty) {
+            throw new Error(`الكمية المتاحة من "${current.name}" غير كافية (المتاح: ${current.stock_qty})`);
+          }
+        }
+
         const unitCost = it.product_id ? (getProductCost.get(it.product_id)?.cost || 0) : 0;
         insertItem.run(saleId, it.product_id || null, it.name, it.qty, it.unit_price, unitCost,
           it.qty * it.unit_price, it.is_kitchen_item ? 1 : 0);

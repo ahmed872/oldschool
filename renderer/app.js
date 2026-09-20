@@ -129,11 +129,14 @@ function renderCategorySelect() {
 }
 
 function addToCart(product) {
-  if (product.track_stock && product.stock_qty <= 0) {
-    alert('المنتج غير متوفر بالمخزون');
+  const existing = cart.find((it) => it.product_id === product.id);
+  const qtyInCart = existing ? existing.qty : 0;
+
+  if (product.track_stock && qtyInCart + 1 > product.stock_qty) {
+    alert(`الكمية المتاحة من "${product.name}" في المخزون: ${product.stock_qty} فقط`);
     return;
   }
-  const existing = cart.find((it) => it.product_id === product.id);
+
   if (existing) {
     existing.qty += 1;
   } else {
@@ -169,7 +172,14 @@ function renderCart() {
   container.querySelectorAll('button').forEach((btn) => {
     btn.addEventListener('click', () => {
       const index = Number(btn.dataset.index);
-      if (btn.dataset.action === 'inc') cart[index].qty += 1;
+      if (btn.dataset.action === 'inc') {
+        const product = products.find((p) => p.id === cart[index].product_id);
+        if (product && product.track_stock && cart[index].qty + 1 > product.stock_qty) {
+          alert(`الكمية المتاحة من "${product.name}" في المخزون: ${product.stock_qty} فقط`);
+          return;
+        }
+        cart[index].qty += 1;
+      }
       if (btn.dataset.action === 'dec') cart[index].qty = Math.max(1, cart[index].qty - 1);
       if (btn.dataset.action === 'remove') cart.splice(index, 1);
       renderCart();
@@ -222,12 +232,18 @@ function setupPosHandlers() {
     const taxPercent = Number(settings.tax_percent) || 0;
     const paymentMethod = document.getElementById('paymentMethod').value;
 
-    const result = await window.api.sales.create({
-      items: cart,
-      discount,
-      taxPercent,
-      paymentMethod,
-    });
+    let result;
+    try {
+      result = await window.api.sales.create({
+        items: cart,
+        discount,
+        taxPercent,
+        paymentMethod,
+      });
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
 
     cart = [];
     document.getElementById('discountInput').value = 0;

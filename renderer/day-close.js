@@ -26,10 +26,13 @@ async function render() {
   const widthMm = Number(settings.receipt_width_mm) || 58;
   applyPageWidth(widthMm);
 
+  const header = settings.logo_data_url
+    ? `<div class="logo-box"><img src="${settings.logo_data_url}" /></div>`
+    : `<h2>${escapeHtml(settings.store_name || '')}</h2>`;
+
   const container = document.getElementById('report');
   container.innerHTML = `
-    ${settings.logo_data_url ? `<div class="logo-box"><img src="${settings.logo_data_url}" /></div>` : ''}
-    <h2>${escapeHtml(settings.store_name || '')}</h2>
+    ${header}
     <p class="center">تقرير إغلاق اليوم</p>
     <p class="center">${escapeHtml(closing.date)}</p>
     <hr />
