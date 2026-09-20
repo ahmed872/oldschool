@@ -66,8 +66,21 @@ CREATE TABLE IF NOT EXISTS sale_items (
   name TEXT NOT NULL,
   qty REAL NOT NULL,
   unit_price REAL NOT NULL,
+  unit_cost REAL NOT NULL DEFAULT 0,
   line_total REAL NOT NULL,
   is_kitchen_item INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS returns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sale_id INTEGER NOT NULL REFERENCES sales(id),
+  sale_item_id INTEGER NOT NULL REFERENCES sale_items(id),
+  product_id INTEGER REFERENCES products(id),
+  qty REAL NOT NULL,
+  refunded_amount REAL NOT NULL,
+  reason TEXT,
+  user_id INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS stock_movements (
@@ -84,34 +97,44 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 `);
 
+// Lightweight migration for databases created before unit_cost existed.
+const saleItemCols = db.prepare("PRAGMA table_info(sale_items)").all().map((c) => c.name);
+if (!saleItemCols.includes('unit_cost')) {
+  db.exec('ALTER TABLE sale_items ADD COLUMN unit_cost REAL NOT NULL DEFAULT 0');
+}
+
 function seedIfEmpty() {
   const productCount = db.prepare('SELECT COUNT(*) AS c FROM products').get().c;
-  if (productCount > 0) return;
+  if (productCount === 0) {
+    const insertCategory = db.prepare('INSERT INTO categories (name, is_kitchen) VALUES (?, ?)');
+    const foodCat = insertCategory.run('مأكولات', 1).lastInsertRowid;
+    const drinksCat = insertCategory.run('مشروبات', 1).lastInsertRowid;
+    const generalCat = insertCategory.run('عام', 0).lastInsertRowid;
 
-  const insertCategory = db.prepare('INSERT INTO categories (name, is_kitchen) VALUES (?, ?)');
-  const foodCat = insertCategory.run('مأكولات', 1).lastInsertRowid;
-  const drinksCat = insertCategory.run('مشروبات', 1).lastInsertRowid;
-  const generalCat = insertCategory.run('عام', 0).lastInsertRowid;
+    const insertProduct = db.prepare(`
+      INSERT INTO products (name, barcode, category_id, price, cost, stock_qty, track_stock)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    insertProduct.run('برجر لحم', '1001', foodCat, 85, 45, 0, 0);
+    insertProduct.run('بيتزا مارجريتا', '1002', foodCat, 120, 60, 0, 0);
+    insertProduct.run('بطاطس مقلية', '1003', foodCat, 35, 15, 0, 0);
+    insertProduct.run('عصير برتقال', '2001', drinksCat, 25, 10, 40, 1);
+    insertProduct.run('مياه معدنية', '2002', drinksCat, 10, 4, 100, 1);
+    insertProduct.run('قهوة تركي', '2003', drinksCat, 20, 8, 0, 0);
+    insertProduct.run('منتج عام', '3001', generalCat, 15, 7, 25, 1);
 
-  const insertProduct = db.prepare(`
-    INSERT INTO products (name, barcode, category_id, price, cost, stock_qty, track_stock)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  insertProduct.run('برجر لحم', '1001', foodCat, 85, 45, 0, 0);
-  insertProduct.run('بيتزا مارجريتا', '1002', foodCat, 120, 60, 0, 0);
-  insertProduct.run('بطاطس مقلية', '1003', foodCat, 35, 15, 0, 0);
-  insertProduct.run('عصير برتقال', '2001', drinksCat, 25, 10, 40, 1);
-  insertProduct.run('مياه معدنية', '2002', drinksCat, 10, 4, 100, 1);
-  insertProduct.run('قهوة تركي', '2003', drinksCat, 20, 8, 0, 0);
-  insertProduct.run('منتج عام', '3001', generalCat, 15, 7, 25, 1);
+    const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
+    insertSetting.run('store_name', 'متجري');
+    insertSetting.run('currency', 'ج.م');
+    insertSetting.run('tax_percent', '0');
+  }
 
-  const insertUser = db.prepare('INSERT INTO users (username, pin, role) VALUES (?, ?, ?)');
-  insertUser.run('admin', '1234', 'admin');
-
-  const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
-  insertSetting.run('store_name', 'متجري');
-  insertSetting.run('currency', 'ج.م');
-  insertSetting.run('tax_percent', '0');
+  const userCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
+  if (userCount === 0) {
+    const insertUser = db.prepare('INSERT INTO users (username, pin, role) VALUES (?, ?, ?)');
+    insertUser.run('admin', '1234', 'admin');
+    insertUser.run('cashier', '1111', 'cashier');
+  }
 }
 seedIfEmpty();
 
@@ -124,6 +147,38 @@ function nextSaleNumber() {
 module.exports = {
   db,
 
+  // ---------- Auth & users ----------
+  verifyLogin(username, pin) {
+    const user = db.prepare('SELECT * FROM users WHERE username = ? AND pin = ? AND is_active = 1').get(username, pin);
+    if (!user) return null;
+    return { id: user.id, username: user.username, role: user.role };
+  },
+
+  getUsers() {
+    return db.prepare('SELECT id, username, role, is_active FROM users ORDER BY username').all();
+  },
+
+  saveUser(user) {
+    if (user.id) {
+      if (user.pin) {
+        db.prepare('UPDATE users SET username=?, pin=?, role=? WHERE id=?')
+          .run(user.username, user.pin, user.role, user.id);
+      } else {
+        db.prepare('UPDATE users SET username=?, role=? WHERE id=?')
+          .run(user.username, user.role, user.id);
+      }
+      return user.id;
+    }
+    const info = db.prepare('INSERT INTO users (username, pin, role) VALUES (?, ?, ?)')
+      .run(user.username, user.pin, user.role || 'cashier');
+    return info.lastInsertRowid;
+  },
+
+  setUserActive(id, isActive) {
+    db.prepare('UPDATE users SET is_active = ? WHERE id = ?').run(isActive ? 1 : 0, id);
+  },
+
+  // ---------- Categories & products ----------
   getCategories() {
     return db.prepare('SELECT * FROM categories ORDER BY name').all();
   },
@@ -164,6 +219,7 @@ module.exports = {
     return info.lastInsertRowid;
   },
 
+  // ---------- Sales ----------
   createSale(payload) {
     const { items, discount = 0, taxPercent = 0, paymentMethod = 'cash', customerId = null, userId = null } = payload;
     const subtotal = items.reduce((sum, it) => sum + it.qty * it.unit_price, 0);
@@ -172,13 +228,14 @@ module.exports = {
     const total = taxable + tax;
     const hasKitchenItems = items.some((it) => it.is_kitchen_item);
 
+    const getProductCost = db.prepare('SELECT cost FROM products WHERE id = ?');
     const insertSale = db.prepare(`
       INSERT INTO sales (sale_number, user_id, customer_id, subtotal, discount, tax, total, payment_method, kitchen_status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertItem = db.prepare(`
-      INSERT INTO sale_items (sale_id, product_id, name, qty, unit_price, line_total, is_kitchen_item)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sale_items (sale_id, product_id, name, qty, unit_price, unit_cost, line_total, is_kitchen_item)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const decrementStock = db.prepare(`
       UPDATE products SET stock_qty = stock_qty - ? WHERE id = ? AND track_stock = 1
@@ -196,7 +253,8 @@ module.exports = {
       ).lastInsertRowid;
 
       for (const it of items) {
-        insertItem.run(saleId, it.product_id || null, it.name, it.qty, it.unit_price,
+        const unitCost = it.product_id ? (getProductCost.get(it.product_id)?.cost || 0) : 0;
+        insertItem.run(saleId, it.product_id || null, it.name, it.qty, it.unit_price, unitCost,
           it.qty * it.unit_price, it.is_kitchen_item ? 1 : 0);
         if (it.product_id) {
           decrementStock.run(it.qty, it.product_id);
@@ -218,6 +276,66 @@ module.exports = {
     return db.prepare('SELECT * FROM sale_items WHERE sale_id = ?').all(saleId);
   },
 
+  getSaleFull(saleId) {
+    const sale = db.prepare('SELECT * FROM sales WHERE id = ?').get(saleId);
+    if (!sale) return null;
+    const items = db.prepare('SELECT * FROM sale_items WHERE sale_id = ?').all(saleId);
+    const returnedByItem = db.prepare(`
+      SELECT sale_item_id, SUM(qty) AS returned_qty FROM returns WHERE sale_id = ? GROUP BY sale_item_id
+    `).all(saleId);
+    const returnedMap = Object.fromEntries(returnedByItem.map((r) => [r.sale_item_id, r.returned_qty]));
+    return {
+      sale,
+      items: items.map((it) => ({ ...it, returned_qty: returnedMap[it.id] || 0 })),
+      settings: this.getSettings(),
+    };
+  },
+
+  // ---------- Returns ----------
+  createReturn({ saleId, saleItemId, qty, reason, userId }) {
+    const item = db.prepare('SELECT * FROM sale_items WHERE id = ?').get(saleItemId);
+    if (!item) throw new Error('صنف الفاتورة غير موجود');
+
+    const alreadyReturned = db.prepare(
+      'SELECT COALESCE(SUM(qty), 0) AS q FROM returns WHERE sale_item_id = ?'
+    ).get(saleItemId).q;
+    const availableToReturn = item.qty - alreadyReturned;
+    if (qty <= 0 || qty > availableToReturn) {
+      throw new Error('الكمية المطلوب إرجاعها غير صحيحة');
+    }
+
+    const refundedAmount = qty * item.unit_price;
+
+    const insertReturn = db.prepare(`
+      INSERT INTO returns (sale_id, sale_item_id, product_id, qty, refunded_amount, reason, user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const restoreStock = db.prepare(`
+      UPDATE products SET stock_qty = stock_qty + ? WHERE id = ? AND track_stock = 1
+    `);
+    const insertMovement = db.prepare(`
+      INSERT INTO stock_movements (product_id, change_qty, reason) VALUES (?, ?, 'return')
+    `);
+
+    const tx = db.transaction(() => {
+      const returnId = insertReturn.run(
+        saleId, saleItemId, item.product_id, qty, refundedAmount, reason || null, userId || null
+      ).lastInsertRowid;
+      if (item.product_id) {
+        restoreStock.run(qty, item.product_id);
+        insertMovement.run(item.product_id, qty);
+      }
+      return returnId;
+    });
+
+    return { returnId: tx(), refundedAmount };
+  },
+
+  getReturnsForSale(saleId) {
+    return db.prepare('SELECT * FROM returns WHERE sale_id = ?').all(saleId);
+  },
+
+  // ---------- Kitchen ----------
   getKitchenOrders() {
     return db.prepare(`
       SELECT s.id AS sale_id, s.sale_number, s.kitchen_status, s.created_at
@@ -234,6 +352,56 @@ module.exports = {
     db.prepare('UPDATE sales SET kitchen_status = ? WHERE id = ?').run(status, saleId);
   },
 
+  // ---------- Reports ----------
+  getSalesSummary(fromDate, toDate) {
+    const range = { from: `${fromDate} 00:00:00`, to: `${toDate} 23:59:59` };
+
+    const totals = db.prepare(`
+      SELECT
+        COUNT(DISTINCT s.id) AS invoice_count,
+        COALESCE(SUM(si.line_total), 0) AS gross_sales,
+        COALESCE(SUM(si.qty * si.unit_cost), 0) AS total_cost,
+        COALESCE(SUM(s.discount), 0) AS total_discount,
+        COALESCE(SUM(s.tax), 0) AS total_tax
+      FROM sales s
+      JOIN sale_items si ON si.sale_id = s.id
+      WHERE s.created_at BETWEEN ? AND ?
+    `).get(range.from, range.to);
+
+    const totalReturns = db.prepare(`
+      SELECT COALESCE(SUM(r.refunded_amount), 0) AS amount, COALESCE(SUM(r.qty * si.unit_cost), 0) AS cost
+      FROM returns r
+      JOIN sale_items si ON si.id = r.sale_item_id
+      WHERE r.created_at BETWEEN ? AND ?
+    `).get(range.from, range.to);
+
+    const netSales = totals.gross_sales - totalReturns.amount;
+    const netCost = totals.total_cost - totalReturns.cost;
+
+    const topProducts = db.prepare(`
+      SELECT si.name, SUM(si.qty) AS qty_sold, SUM(si.line_total) AS revenue
+      FROM sales s
+      JOIN sale_items si ON si.sale_id = s.id
+      WHERE s.created_at BETWEEN ? AND ?
+      GROUP BY si.name
+      ORDER BY revenue DESC
+      LIMIT 10
+    `).all(range.from, range.to);
+
+    return {
+      invoiceCount: totals.invoice_count,
+      grossSales: totals.gross_sales,
+      totalReturns: totalReturns.amount,
+      netSales,
+      totalCost: netCost,
+      profit: netSales - netCost,
+      totalDiscount: totals.total_discount,
+      totalTax: totals.total_tax,
+      topProducts,
+    };
+  },
+
+  // ---------- Settings ----------
   getSettings() {
     const rows = db.prepare('SELECT key, value FROM settings').all();
     return Object.fromEntries(rows.map((r) => [r.key, r.value]));

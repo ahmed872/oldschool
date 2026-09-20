@@ -2,12 +2,20 @@ let categories = [];
 let products = [];
 let cart = []; // { product_id, name, qty, unit_price, is_kitchen_item }
 let settings = {};
+let currentUser = null;
 
 async function init() {
+  currentUser = await window.api.auth.me();
+  if (!currentUser) {
+    window.location.href = 'login.html';
+    return;
+  }
+
   categories = await window.api.categories.list();
   products = await window.api.products.list();
   settings = await window.api.settings.get();
 
+  applyRoleVisibility();
   renderProductGrid();
   renderCategorySelect();
   renderCart();
@@ -19,19 +27,38 @@ async function init() {
   setupPosHandlers();
   setupProductHandlers();
   setupSettingsHandlers();
+  setupReportsHandlers();
+  setupUsersHandlers();
+
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('reportFrom').value = today;
+  document.getElementById('reportTo').value = today;
+}
+
+function applyRoleVisibility() {
+  document.getElementById('userBadge').textContent =
+    `${currentUser.username} (${currentUser.role === 'admin' ? 'مدير' : 'كاشير'})`;
+
+  if (currentUser.role !== 'admin') {
+    document.querySelectorAll('.admin-only').forEach((el) => (el.style.display = 'none'));
+  }
 }
 
 function setupNav() {
   document.querySelectorAll('.nav-btn[data-view]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       document.querySelectorAll('.nav-btn[data-view]').forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
       document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
       document.getElementById('view-' + btn.dataset.view).classList.add('active');
+      if (btn.dataset.view === 'users') await refreshUsersTable();
     });
   });
   document.getElementById('openKitchenBtn').addEventListener('click', () => {
     window.api.kitchen.openWindow();
+  });
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await window.api.auth.logout();
   });
 }
 
@@ -144,13 +171,21 @@ function setupPosHandlers() {
       paymentMethod,
     });
 
-    alert(`تم إتمام البيع - فاتورة رقم ${result.saleNumber} بإجمالي ${result.total.toFixed(2)}`);
     cart = [];
     document.getElementById('discountInput').value = 0;
     renderCart();
     products = await window.api.products.list();
     renderProductGrid();
     await refreshSalesTable();
+
+    const wantsPrint = confirm(`تم إتمام البيع - فاتورة رقم ${result.saleNumber} بإجمالي ${result.total.toFixed(2)}\n\nهل تريد طباعة الفاتورة؟`);
+    if (wantsPrint) {
+      try {
+        await window.api.print.receipt(result.saleId);
+      } catch (err) {
+        alert('تعذرت الطباعة: ' + err.message);
+      }
+    }
   });
 }
 
@@ -163,8 +198,75 @@ async function refreshSalesTable() {
       <td>${s.created_at}</td>
       <td>${s.total.toFixed(2)}</td>
       <td>${s.payment_method === 'cash' ? 'نقدًا' : 'بطاقة'}</td>
+      <td>
+        <button class="secondary" data-view-sale="${s.id}">تفاصيل</button>
+        <button class="secondary" data-print-sale="${s.id}">طباعة</button>
+      </td>
     </tr>
   `).join('');
+
+  body.querySelectorAll('[data-view-sale]').forEach((btn) => {
+    btn.addEventListener('click', () => showSaleDetail(Number(btn.dataset.viewSale)));
+  });
+  body.querySelectorAll('[data-print-sale]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        await window.api.print.receipt(Number(btn.dataset.printSale));
+      } catch (err) {
+        alert('تعذرت الطباعة: ' + err.message);
+      }
+    });
+  });
+}
+
+async function showSaleDetail(saleId) {
+  const data = await window.api.sales.full(saleId);
+  const box = document.getElementById('saleDetailBox');
+  box.style.display = 'block';
+
+  box.innerHTML = `
+    <h3>تفاصيل فاتورة ${escapeHtml(data.sale.sale_number)}</h3>
+    <table>
+      <thead><tr><th>الصنف</th><th>الكمية</th><th>تم إرجاعه</th><th>السعر</th><th>إرجاع</th></tr></thead>
+      <tbody>
+        ${data.items.map((it) => {
+          const remaining = it.qty - it.returned_qty;
+          return `
+            <tr>
+              <td>${escapeHtml(it.name)}</td>
+              <td>${it.qty}</td>
+              <td>${it.returned_qty}</td>
+              <td>${it.unit_price.toFixed(2)}</td>
+              <td>
+                ${remaining > 0 ? `
+                  <input type="number" min="1" max="${remaining}" value="1" style="width:50px;" id="retQty-${it.id}" />
+                  <button class="secondary" data-return-item="${it.id}" data-sale="${saleId}">إرجاع</button>
+                ` : 'مكتمل'}
+              </td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+
+  box.querySelectorAll('[data-return-item]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const saleItemId = Number(btn.dataset.returnItem);
+      const saleIdVal = Number(btn.dataset.sale);
+      const qty = Number(document.getElementById(`retQty-${saleItemId}`).value);
+      const reason = prompt('سبب الإرجاع (اختياري):') || '';
+      try {
+        await window.api.returns.create({ saleId: saleIdVal, saleItemId, qty, reason });
+        alert('تم تسجيل الإرجاع');
+        showSaleDetail(saleIdVal);
+        products = await window.api.products.list();
+        renderProductGrid();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  });
 }
 
 async function refreshProductsTable() {
@@ -236,6 +338,76 @@ function setupSettingsHandlers() {
     renderCategorySelect();
     document.getElementById('catName').value = '';
     alert('تمت إضافة الفئة');
+  });
+}
+
+function setupReportsHandlers() {
+  document.getElementById('loadReportBtn').addEventListener('click', async () => {
+    const from = document.getElementById('reportFrom').value;
+    const to = document.getElementById('reportTo').value;
+    const summary = await window.api.reports.summary(from, to);
+    const currency = settings.currency || '';
+    const box = document.getElementById('reportResults');
+
+    box.innerHTML = `
+      <div class="card-box" style="max-width:700px;">
+        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;"><span>عدد الفواتير</span><span>${summary.invoiceCount}</span></div>
+        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;"><span>إجمالي المبيعات</span><span>${summary.grossSales.toFixed(2)} ${currency}</span></div>
+        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;"><span>إجمالي المرتجعات</span><span>${summary.totalReturns.toFixed(2)} ${currency}</span></div>
+        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;"><span>صافي المبيعات</span><span>${summary.netSales.toFixed(2)} ${currency}</span></div>
+        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;"><span>التكلفة</span><span>${summary.totalCost.toFixed(2)} ${currency}</span></div>
+        <div class="row" style="display:flex;justify-content:space-between;margin:6px 0;font-weight:bold;color:#22c55e;"><span>صافي الربح</span><span>${summary.profit.toFixed(2)} ${currency}</span></div>
+      </div>
+      <h3>الأكثر مبيعًا</h3>
+      <table>
+        <thead><tr><th>المنتج</th><th>الكمية المباعة</th><th>الإيراد</th></tr></thead>
+        <tbody>
+          ${summary.topProducts.map((p) => `
+            <tr><td>${escapeHtml(p.name)}</td><td>${p.qty_sold}</td><td>${p.revenue.toFixed(2)}</td></tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  });
+}
+
+async function refreshUsersTable() {
+  const users = await window.api.users.list();
+  const body = document.getElementById('usersTableBody');
+  body.innerHTML = users.map((u) => `
+    <tr>
+      <td>${escapeHtml(u.username)}</td>
+      <td>${u.role === 'admin' ? 'مدير' : 'كاشير'}</td>
+      <td>${u.is_active ? 'مفعل' : 'موقوف'}</td>
+      <td>
+        <button class="secondary" data-toggle-user="${u.id}" data-active="${u.is_active}">
+          ${u.is_active ? 'إيقاف' : 'تفعيل'}
+        </button>
+      </td>
+    </tr>
+  `).join('');
+
+  body.querySelectorAll('[data-toggle-user]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = Number(btn.dataset.toggleUser);
+      const isActive = btn.dataset.active === '1';
+      await window.api.users.setActive(id, !isActive);
+      await refreshUsersTable();
+    });
+  });
+}
+
+function setupUsersHandlers() {
+  document.getElementById('saveUserBtn').addEventListener('click', async () => {
+    const username = document.getElementById('uUsername').value.trim();
+    const pin = document.getElementById('uPin').value.trim();
+    const role = document.getElementById('uRole').value;
+    if (!username || !pin) { alert('اسم المستخدم والرقم السري مطلوبان'); return; }
+    await window.api.users.save({ username, pin, role });
+    document.getElementById('uUsername').value = '';
+    document.getElementById('uPin').value = '';
+    await refreshUsersTable();
+    alert('تم حفظ المستخدم');
   });
 }
 

@@ -12,8 +12,13 @@
       <button class="nav-btn active" data-view="pos">نقطة البيع</button>
       <button class="nav-btn" data-view="products">المنتجات</button>
       <button class="nav-btn" data-view="sales">سجل المبيعات</button>
-      <button class="nav-btn" data-view="settings">الإعدادات</button>
+      <button class="nav-btn admin-only" data-view="reports">التقارير</button>
+      <button class="nav-btn admin-only" data-view="users">الموظفون</button>
+      <button class="nav-btn admin-only" data-view="settings">الإعدادات</button>
       <button class="nav-btn" id="openKitchenBtn">شاشة المطبخ ⤴</button>
+      <div style="flex:1;"></div>
+      <div id="userBadge" style="color:#94a3b8;font-size:13px;margin-bottom:6px;"></div>
+      <button class="nav-btn" id="logoutBtn">تسجيل الخروج</button>
     </aside>
 
     <main class="main-content">
@@ -68,8 +73,43 @@
       <section class="view" id="view-sales">
         <h2>سجل المبيعات</h2>
         <table>
-          <thead><tr><th>رقم الفاتورة</th><th>التاريخ</th><th>الإجمالي</th><th>طريقة الدفع</th></tr></thead>
+          <thead><tr><th>رقم الفاتورة</th><th>التاريخ</th><th>الإجمالي</th><th>طريقة الدفع</th><th></th></tr></thead>
           <tbody id="salesTableBody"></tbody>
+        </table>
+        <div id="saleDetailBox" class="card-box" style="display:none;max-width:700px;"></div>
+      </section>
+
+      <!-- Reports View -->
+      <section class="view" id="view-reports">
+        <h2>التقارير</h2>
+        <div class="card-box" style="max-width:700px;">
+          <div style="display:flex;gap:10px;align-items:flex-end;">
+            <div class="form-row"><label>من تاريخ</label><input id="reportFrom" type="date" /></div>
+            <div class="form-row"><label>إلى تاريخ</label><input id="reportTo" type="date" /></div>
+            <button class="secondary" id="loadReportBtn" style="height:38px;">عرض</button>
+          </div>
+        </div>
+        <div id="reportResults"></div>
+      </section>
+
+      <!-- Users View -->
+      <section class="view" id="view-users">
+        <h2>الموظفون والصلاحيات</h2>
+        <div class="card-box">
+          <div class="form-row"><label>اسم المستخدم</label><input id="uUsername" /></div>
+          <div class="form-row"><label>الرقم السري</label><input id="uPin" type="password" /></div>
+          <div class="form-row">
+            <label>الصلاحية</label>
+            <select id="uRole">
+              <option value="cashier">كاشير</option>
+              <option value="admin">مدير</option>
+            </select>
+          </div>
+          <button class="primary" id="saveUserBtn">حفظ المستخدم</button>
+        </div>
+        <table>
+          <thead><tr><th>اسم المستخدم</th><th>الصلاحية</th><th>الحالة</th><th></th></tr></thead>
+          <tbody id="usersTableBody"></tbody>
         </table>
       </section>
 
