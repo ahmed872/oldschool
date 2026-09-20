@@ -29,6 +29,7 @@ async function init() {
   setupSettingsHandlers();
   setupReportsHandlers();
   setupUsersHandlers();
+  setupBackupHandlers();
 
   const today = new Date().toISOString().slice(0, 10);
   document.getElementById('reportFrom').value = today;
@@ -448,6 +449,20 @@ function setupUsersHandlers() {
     document.getElementById('uPin').value = '';
     await refreshUsersTable();
     alert('تم حفظ المستخدم');
+  });
+}
+
+async function setupBackupHandlers() {
+  const dbPath = await window.api.backup.currentPath();
+  document.getElementById('dbPathText').textContent = 'مكان قاعدة البيانات الحالية: ' + dbPath;
+
+  document.getElementById('createBackupBtn').addEventListener('click', async () => {
+    const filePath = await window.api.backup.create();
+    if (filePath) alert('تم حفظ النسخة الاحتياطية في:\n' + filePath);
+  });
+
+  document.getElementById('restoreBackupBtn').addEventListener('click', async () => {
+    await window.api.backup.restore();
   });
 }
 

@@ -441,4 +441,12 @@ module.exports = {
   saveSetting(key, value) {
     db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, value);
   },
+
+  // ---------- Backup ----------
+  dbPath,
+
+  flushToDisk() {
+    // Forces all WAL-journaled changes into the main .db file so a plain file copy is a complete backup.
+    db.pragma('wal_checkpoint(TRUNCATE)');
+  },
 };

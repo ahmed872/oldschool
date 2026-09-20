@@ -99,6 +99,49 @@ async function exportReportPdf(fromDate, toDate) {
   return filePath;
 }
 
+async function createBackup() {
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    title: 'حفظ نسخة احتياطية',
+    defaultPath: `smart-pos-backup-${new Date().toISOString().slice(0, 10)}.db`,
+    filters: [{ name: 'SQLite Database', extensions: ['db'] }],
+  });
+  if (canceled || !filePath) return null;
+
+  store.flushToDisk();
+  fs.copyFileSync(store.dbPath, filePath);
+  return filePath;
+}
+
+async function restoreBackup() {
+  const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+    title: 'اختيار ملف النسخة الاحتياطية',
+    filters: [{ name: 'SQLite Database', extensions: ['db'] }],
+    properties: ['openFile'],
+  });
+  if (canceled || filePaths.length === 0) return false;
+
+  const confirmed = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    buttons: ['إلغاء', 'استعادة'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'تأكيد الاستعادة',
+    message: 'هيتم استبدال كل البيانات الحالية ببيانات النسخة الاحتياطية، وهيقفل البرنامج ويفتح تاني. متأكد؟',
+  });
+  if (confirmed.response !== 1) return false;
+
+  store.db.close();
+  fs.copyFileSync(filePaths[0], store.dbPath);
+  for (const suffix of ['-wal', '-shm']) {
+    const sidecar = store.dbPath + suffix;
+    if (fs.existsSync(sidecar)) fs.unlinkSync(sidecar);
+  }
+
+  app.relaunch();
+  app.exit(0);
+  return true;
+}
+
 async function exportReportExcel(fromDate, toDate) {
   const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
     title: 'حفظ التقرير كـ Excel',
@@ -195,6 +238,10 @@ function registerIpcHandlers() {
 
   ipcMain.handle('settings:get', () => store.getSettings());
   ipcMain.handle('settings:save', (_e, key, value) => store.saveSetting(key, value));
+
+  ipcMain.handle('backup:create', () => createBackup());
+  ipcMain.handle('backup:restore', () => restoreBackup());
+  ipcMain.handle('backup:currentPath', () => store.dbPath);
 
   ipcMain.handle('print:receipt', (_e, saleId) => printReceipt(saleId));
   ipcMain.handle('print:qr', (_e, text) => QRCode.toDataURL(text, { margin: 0, width: 140 }));

@@ -45,6 +45,11 @@ contextBridge.exposeInMainWorld('api', {
     get: () => ipcRenderer.invoke('settings:get'),
     save: (key, value) => ipcRenderer.invoke('settings:save', key, value),
   },
+  backup: {
+    create: () => ipcRenderer.invoke('backup:create'),
+    restore: () => ipcRenderer.invoke('backup:restore'),
+    currentPath: () => ipcRenderer.invoke('backup:currentPath'),
+  },
   print: {
     receipt: (saleId) => ipcRenderer.invoke('print:receipt', saleId),
     qr: (text) => ipcRenderer.invoke('print:qr', text),
