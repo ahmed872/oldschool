@@ -1,5 +1,8 @@
 const path = require('node:path');
-const { app, BrowserWindow, ipcMain } = require('electron');
+const fs = require('node:fs');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const QRCode = require('qrcode');
+const ExcelJS = require('exceljs');
 
 let store;
 let mainWindow;
@@ -66,6 +69,76 @@ function printReceipt(saleId) {
   });
 }
 
+async function exportReportPdf(fromDate, toDate) {
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    title: 'حفظ التقرير كـ PDF',
+    defaultPath: `تقرير-${fromDate}-الى-${toDate}.pdf`,
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  });
+  if (canceled || !filePath) return null;
+
+  const reportWindow = new BrowserWindow({
+    width: 900,
+    height: 700,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  await reportWindow.loadFile(path.join(__dirname, '..', 'renderer', 'report-print.html'), {
+    query: { from: fromDate, to: toDate },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 700));
+
+  const pdfBuffer = await reportWindow.webContents.printToPDF({ printBackground: true });
+  fs.writeFileSync(filePath, pdfBuffer);
+  reportWindow.close();
+  return filePath;
+}
+
+async function exportReportExcel(fromDate, toDate) {
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    title: 'حفظ التقرير كـ Excel',
+    defaultPath: `تقرير-${fromDate}-الى-${toDate}.xlsx`,
+    filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+  });
+  if (canceled || !filePath) return null;
+
+  const rows = store.getSalesDetailRows(fromDate, toDate);
+  const summary = store.getSalesSummary(fromDate, toDate);
+
+  const workbook = new ExcelJS.Workbook();
+
+  const summarySheet = workbook.addWorksheet('الملخص');
+  summarySheet.views = [{ rightToLeft: true }];
+  summarySheet.addRows([
+    ['الفترة', `${fromDate} إلى ${toDate}`],
+    ['عدد الفواتير', summary.invoiceCount],
+    ['إجمالي المبيعات', summary.grossSales],
+    ['إجمالي المرتجعات', summary.totalReturns],
+    ['صافي المبيعات', summary.netSales],
+    ['التكلفة', summary.totalCost],
+    ['صافي الربح', summary.profit],
+  ]);
+
+  const detailSheet = workbook.addWorksheet('تفاصيل المبيعات');
+  detailSheet.views = [{ rightToLeft: true }];
+  detailSheet.addRow(['التاريخ', 'رقم الفاتورة', 'الكاشير', 'الصنف', 'الكمية', 'سعر الوحدة', 'الإجمالي', 'طريقة الدفع']);
+  for (const r of rows) {
+    detailSheet.addRow([
+      r.created_at, r.sale_number, r.cashier_name || '-', r.product_name,
+      r.qty, r.unit_price, r.line_total, r.payment_method === 'cash' ? 'نقدًا' : 'بطاقة',
+    ]);
+  }
+  detailSheet.columns.forEach((col) => { col.width = 18; });
+
+  await workbook.xlsx.writeFile(filePath);
+  return filePath;
+}
+
 app.whenReady().then(() => {
   store = require('./db.js');
   registerIpcHandlers();
@@ -116,11 +189,15 @@ function registerIpcHandlers() {
   ipcMain.handle('kitchen:openWindow', () => createKitchenWindow());
 
   ipcMain.handle('reports:summary', (_e, fromDate, toDate) => store.getSalesSummary(fromDate, toDate));
+  ipcMain.handle('reports:detailRows', (_e, fromDate, toDate) => store.getSalesDetailRows(fromDate, toDate));
+  ipcMain.handle('reports:exportPdf', (_e, fromDate, toDate) => exportReportPdf(fromDate, toDate));
+  ipcMain.handle('reports:exportExcel', (_e, fromDate, toDate) => exportReportExcel(fromDate, toDate));
 
   ipcMain.handle('settings:get', () => store.getSettings());
   ipcMain.handle('settings:save', (_e, key, value) => store.saveSetting(key, value));
 
   ipcMain.handle('print:receipt', (_e, saleId) => printReceipt(saleId));
+  ipcMain.handle('print:qr', (_e, text) => QRCode.toDataURL(text, { margin: 0, width: 140 }));
 
   ipcMain.handle('nav:goToApp', () => {
     if (mainWindow) mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));

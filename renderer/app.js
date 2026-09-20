@@ -65,17 +65,39 @@ function setupNav() {
 function renderProductGrid() {
   const grid = document.getElementById('productGrid');
   grid.innerHTML = '';
+
+  const byCategory = new Map();
   for (const p of products) {
-    const card = document.createElement('div');
-    card.className = 'product-card';
-    const stockLabel = p.track_stock ? `${p.stock_qty} بالمخزون` : 'غير محدود';
-    card.innerHTML = `
-      <div class="name">${escapeHtml(p.name)}</div>
-      <div class="price">${p.price.toFixed(2)} ${settings.currency || ''}</div>
-      <div class="stock">${stockLabel}</div>
-    `;
-    card.addEventListener('click', () => addToCart(p));
-    grid.appendChild(card);
+    const key = p.category_id || 'none';
+    if (!byCategory.has(key)) byCategory.set(key, []);
+    byCategory.get(key).push(p);
+  }
+
+  const orderedKeys = categories.map((c) => c.id);
+  if (byCategory.has('none')) orderedKeys.push('none');
+
+  for (const key of orderedKeys) {
+    const items = byCategory.get(key);
+    if (!items || items.length === 0) continue;
+    const categoryName = key === 'none' ? 'بدون فئة' : (categories.find((c) => c.id === key)?.name || '');
+
+    const heading = document.createElement('div');
+    heading.className = 'category-heading';
+    heading.textContent = categoryName;
+    grid.appendChild(heading);
+
+    for (const p of items) {
+      const card = document.createElement('div');
+      card.className = 'product-card';
+      const stockLabel = p.track_stock ? `${p.stock_qty} بالمخزون` : 'غير محدود';
+      card.innerHTML = `
+        <div class="name">${escapeHtml(p.name)}</div>
+        <div class="price">${p.price.toFixed(2)} ${settings.currency || ''}</div>
+        <div class="stock">${stockLabel}</div>
+      `;
+      card.addEventListener('click', () => addToCart(p));
+      grid.appendChild(card);
+    }
   }
 }
 
@@ -318,6 +340,7 @@ function populateSettingsForm() {
   document.getElementById('sStoreName').value = settings.store_name || '';
   document.getElementById('sCurrency').value = settings.currency || '';
   document.getElementById('sTax').value = settings.tax_percent || 0;
+  document.getElementById('sReceiptWidth').value = settings.receipt_width_mm || 58;
 }
 
 function setupSettingsHandlers() {
@@ -325,6 +348,7 @@ function setupSettingsHandlers() {
     await window.api.settings.save('store_name', document.getElementById('sStoreName').value);
     await window.api.settings.save('currency', document.getElementById('sCurrency').value);
     await window.api.settings.save('tax_percent', document.getElementById('sTax').value);
+    await window.api.settings.save('receipt_width_mm', document.getElementById('sReceiptWidth').value);
     settings = await window.api.settings.get();
     renderProductGrid();
     alert('تم حفظ الإعدادات');
@@ -368,6 +392,22 @@ function setupReportsHandlers() {
         </tbody>
       </table>
     `;
+  });
+
+  document.getElementById('exportPdfBtn').addEventListener('click', async () => {
+    const from = document.getElementById('reportFrom').value;
+    const to = document.getElementById('reportTo').value;
+    if (!from || !to) { alert('اختر الفترة أولاً'); return; }
+    const filePath = await window.api.reports.exportPdf(from, to);
+    if (filePath) alert('تم حفظ التقرير: ' + filePath);
+  });
+
+  document.getElementById('exportExcelBtn').addEventListener('click', async () => {
+    const from = document.getElementById('reportFrom').value;
+    const to = document.getElementById('reportTo').value;
+    if (!from || !to) { alert('اختر الفترة أولاً'); return; }
+    const filePath = await window.api.reports.exportExcel(from, to);
+    if (filePath) alert('تم حفظ التقرير: ' + filePath);
   });
 }
 

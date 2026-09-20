@@ -124,9 +124,10 @@ function seedIfEmpty() {
     insertProduct.run('منتج عام', '3001', generalCat, 15, 7, 25, 1);
 
     const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
-    insertSetting.run('store_name', 'متجري');
+    insertSetting.run('store_name', 'الإدارة العامة لشئون المجندين');
     insertSetting.run('currency', 'ج.م');
     insertSetting.run('tax_percent', '0');
+    insertSetting.run('receipt_width_mm', '58');
   }
 
   const userCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
@@ -137,6 +138,16 @@ function seedIfEmpty() {
   }
 }
 seedIfEmpty();
+
+// One-time migration: earlier installs seeded a placeholder store name and no receipt width.
+const currentStoreName = db.prepare("SELECT value FROM settings WHERE key = 'store_name'").get();
+if (currentStoreName && currentStoreName.value === 'متجري') {
+  db.prepare("UPDATE settings SET value = ? WHERE key = 'store_name'").run('الإدارة العامة لشئون المجندين');
+}
+const hasReceiptWidth = db.prepare("SELECT 1 FROM settings WHERE key = 'receipt_width_mm'").get();
+if (!hasReceiptWidth) {
+  db.prepare("INSERT INTO settings (key, value) VALUES ('receipt_width_mm', '58')").run();
+}
 
 function nextSaleNumber() {
   const row = db.prepare(`SELECT sale_number FROM sales ORDER BY id DESC LIMIT 1`).get();
@@ -277,7 +288,12 @@ module.exports = {
   },
 
   getSaleFull(saleId) {
-    const sale = db.prepare('SELECT * FROM sales WHERE id = ?').get(saleId);
+    const sale = db.prepare(`
+      SELECT s.*, u.username AS cashier_name
+      FROM sales s
+      LEFT JOIN users u ON u.id = s.user_id
+      WHERE s.id = ?
+    `).get(saleId);
     if (!sale) return null;
     const items = db.prepare('SELECT * FROM sale_items WHERE sale_id = ?').all(saleId);
     const returnedByItem = db.prepare(`
@@ -289,6 +305,21 @@ module.exports = {
       items: items.map((it) => ({ ...it, returned_qty: returnedMap[it.id] || 0 })),
       settings: this.getSettings(),
     };
+  },
+
+  getSalesDetailRows(fromDate, toDate) {
+    const range = { from: `${fromDate} 00:00:00`, to: `${toDate} 23:59:59` };
+    return db.prepare(`
+      SELECT
+        s.sale_number, s.created_at, s.payment_method, s.total AS invoice_total,
+        u.username AS cashier_name,
+        si.name AS product_name, si.qty, si.unit_price, si.line_total
+      FROM sales s
+      JOIN sale_items si ON si.sale_id = s.id
+      LEFT JOIN users u ON u.id = s.user_id
+      WHERE s.created_at BETWEEN ? AND ?
+      ORDER BY s.id ASC
+    `).all(range.from, range.to);
   },
 
   // ---------- Returns ----------

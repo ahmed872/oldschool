@@ -37,6 +37,9 @@ contextBridge.exposeInMainWorld('api', {
   },
   reports: {
     summary: (fromDate, toDate) => ipcRenderer.invoke('reports:summary', fromDate, toDate),
+    detailRows: (fromDate, toDate) => ipcRenderer.invoke('reports:detailRows', fromDate, toDate),
+    exportPdf: (fromDate, toDate) => ipcRenderer.invoke('reports:exportPdf', fromDate, toDate),
+    exportExcel: (fromDate, toDate) => ipcRenderer.invoke('reports:exportExcel', fromDate, toDate),
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
@@ -44,6 +47,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   print: {
     receipt: (saleId) => ipcRenderer.invoke('print:receipt', saleId),
+    qr: (text) => ipcRenderer.invoke('print:qr', text),
   },
   nav: {
     goToApp: () => ipcRenderer.invoke('nav:goToApp'),

@@ -4,6 +4,15 @@ function escapeHtml(str) {
   }[c]));
 }
 
+function applyPageWidth(widthMm) {
+  const style = document.createElement('style');
+  style.textContent = `
+    @page { size: ${widthMm}mm auto; margin: 2mm; }
+    body { width: ${widthMm - 6}mm; }
+  `;
+  document.head.appendChild(style);
+}
+
 async function render() {
   const params = new URLSearchParams(window.location.search);
   const saleId = Number(params.get('saleId'));
@@ -17,11 +26,16 @@ async function render() {
 
   const { sale, items, settings } = data;
   const currency = settings.currency || '';
+  const widthMm = Number(settings.receipt_width_mm) || 58;
+  applyPageWidth(widthMm);
+
+  const qrDataUrl = await window.api.print.qr(sale.sale_number);
 
   container.innerHTML = `
     <h2>${escapeHtml(settings.store_name || 'المتجر')}</h2>
     <p class="center">فاتورة رقم: ${escapeHtml(sale.sale_number)}</p>
     <p class="center">${escapeHtml(sale.created_at)}</p>
+    <p class="center">الكاشير: ${escapeHtml(sale.cashier_name || '-')}</p>
     <hr />
     <table>
       ${items.map((it) => `
@@ -42,6 +56,7 @@ async function render() {
       <tr><td>الإجمالي</td><td style="text-align:left;">${sale.total.toFixed(2)} ${currency}</td></tr>
     </table>
     <hr />
+    <div class="qr-box"><img src="${qrDataUrl}" alt="QR" /></div>
     <p class="center">شكرًا لتعاملكم معنا</p>
   `;
 }
