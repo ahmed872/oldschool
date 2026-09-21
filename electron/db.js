@@ -135,7 +135,7 @@ function seedIfEmpty() {
   const userCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
   if (userCount === 0) {
     const insertUser = db.prepare('INSERT INTO users (username, pin, role) VALUES (?, ?, ?)');
-    insertUser.run('admin', '1234', 'admin');
+    insertUser.run('admin', '00102026', 'admin');
     insertUser.run('cashier', '1111', 'cashier');
   }
 }
@@ -162,6 +162,8 @@ const hasLogo = db.prepare("SELECT 1 FROM settings WHERE key = 'logo_data_url'")
 if (!hasLogo) {
   db.prepare("INSERT INTO settings (key, value) VALUES ('logo_data_url', ?)").run(DEFAULT_LOGO_DATA_URL);
 }
+// One-time migration: installs still on the original default admin PIN get the new one.
+db.prepare("UPDATE users SET pin = '00102026' WHERE username = 'admin' AND pin = '1234'").run();
 
 function isoWeekKey(date) {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
