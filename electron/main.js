@@ -9,11 +9,14 @@ let mainWindow;
 let kitchenWindow;
 let currentUser = null;
 
+const appIconPath = path.join(__dirname, '..', 'renderer', 'assets', 'app-icon.png');
+
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     title: 'سيستم كاشير',
+    icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -32,6 +35,7 @@ function createKitchenWindow() {
     width: 900,
     height: 700,
     title: 'شاشة المطبخ - سيستم كاشير',
+    icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
