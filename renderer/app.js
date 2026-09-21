@@ -315,6 +315,7 @@ async function showSaleDetail(saleId) {
               <td>
                 ${remaining > 0 ? `
                   <input type="number" min="1" max="${remaining}" value="1" style="width:50px;" id="retQty-${it.id}" />
+                  <input type="text" placeholder="السبب (اختياري)" style="width:120px;" id="retReason-${it.id}" />
                   <button class="secondary" data-return-item="${it.id}" data-sale="${saleId}">إرجاع</button>
                 ` : 'مكتمل'}
               </td>
@@ -330,7 +331,7 @@ async function showSaleDetail(saleId) {
       const saleItemId = Number(btn.dataset.returnItem);
       const saleIdVal = Number(btn.dataset.sale);
       const qty = Number(document.getElementById(`retQty-${saleItemId}`).value);
-      const reason = prompt('سبب الإرجاع (اختياري):') || '';
+      const reason = document.getElementById(`retReason-${saleItemId}`).value.trim();
       try {
         await window.api.returns.create({ saleId: saleIdVal, saleItemId, qty, reason });
         alert('تم تسجيل الإرجاع');
