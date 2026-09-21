@@ -67,11 +67,16 @@
           <div class="form-row">
             <label><input type="checkbox" id="pTrackStock" /> تتبع المخزون</label>
           </div>
+          <div class="form-row">
+            <label>صورة المنتج</label>
+            <div id="pImagePreview" style="margin-bottom:6px;"></div>
+            <input id="pImageInput" type="file" accept="image/*" />
+          </div>
           <button class="primary" id="saveProductBtn">حفظ المنتج</button>
           <button class="secondary" id="cancelEditBtn" style="margin-top:8px;display:none;">إلغاء التعديل</button>
         </div>
         <table>
-          <thead><tr><th>الاسم</th><th>الفئة</th><th>السعر</th><th>المخزون</th><th></th></tr></thead>
+          <thead><tr><th></th><th>الاسم</th><th>الفئة</th><th>السعر</th><th>المخزون</th><th></th></tr></thead>
           <tbody id="productsTableBody"></tbody>
         </table>
       </section>

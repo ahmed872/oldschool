@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS products (
   cost REAL NOT NULL DEFAULT 0,
   stock_qty REAL NOT NULL DEFAULT 0,
   track_stock INTEGER NOT NULL DEFAULT 1,
-  is_active INTEGER NOT NULL DEFAULT 1
+  is_active INTEGER NOT NULL DEFAULT 1,
+  image_data_url TEXT
 );
 
 CREATE TABLE IF NOT EXISTS customers (
@@ -113,6 +114,12 @@ CREATE TABLE IF NOT EXISTS settings (
 const saleItemCols = db.prepare("PRAGMA table_info(sale_items)").all().map((c) => c.name);
 if (!saleItemCols.includes('unit_cost')) {
   db.exec('ALTER TABLE sale_items ADD COLUMN unit_cost REAL NOT NULL DEFAULT 0');
+}
+
+// Lightweight migration for databases created before product images existed.
+const productCols = db.prepare("PRAGMA table_info(products)").all().map((c) => c.name);
+if (!productCols.includes('image_data_url')) {
+  db.exec('ALTER TABLE products ADD COLUMN image_data_url TEXT');
 }
 
 function seedIfEmpty() {
@@ -253,17 +260,19 @@ module.exports = {
   saveProduct(product) {
     if (product.id) {
       db.prepare(`
-        UPDATE products SET name=?, barcode=?, category_id=?, price=?, cost=?, stock_qty=?, track_stock=?
+        UPDATE products SET name=?, barcode=?, category_id=?, price=?, cost=?, stock_qty=?, track_stock=?, image_data_url=?
         WHERE id=?
       `).run(product.name, product.barcode || null, product.category_id || null,
-        product.price, product.cost || 0, product.stock_qty || 0, product.track_stock ? 1 : 0, product.id);
+        product.price, product.cost || 0, product.stock_qty || 0, product.track_stock ? 1 : 0,
+        product.image_data_url || null, product.id);
       return product.id;
     }
     const info = db.prepare(`
-      INSERT INTO products (name, barcode, category_id, price, cost, stock_qty, track_stock)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO products (name, barcode, category_id, price, cost, stock_qty, track_stock, image_data_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(product.name, product.barcode || null, product.category_id || null,
-      product.price, product.cost || 0, product.stock_qty || 0, product.track_stock ? 1 : 0);
+      product.price, product.cost || 0, product.stock_qty || 0, product.track_stock ? 1 : 0,
+      product.image_data_url || null);
     return info.lastInsertRowid;
   },
 

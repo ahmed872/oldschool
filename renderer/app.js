@@ -4,6 +4,7 @@ let cart = []; // { product_id, name, qty, unit_price, is_kitchen_item }
 let settings = {};
 let currentUser = null;
 let editingProductId = null;
+let pendingProductImage = null;
 
 async function init() {
   currentUser = await window.api.auth.me();
@@ -112,7 +113,11 @@ function renderProductGrid() {
       const card = document.createElement('div');
       card.className = 'product-card' + (isLowStock(p) ? ' low-stock' : '');
       const stockLabel = p.track_stock ? `${p.stock_qty} بالمخزون` : 'غير محدود';
+      const thumb = p.image_data_url
+        ? `<img src="${p.image_data_url}" style="width:100%;height:70px;object-fit:cover;border-radius:6px;margin-bottom:6px;" />`
+        : '';
       card.innerHTML = `
+        ${thumb}
         <div class="name">${escapeHtml(p.name)}</div>
         <div class="price">${p.price.toFixed(2)} ${settings.currency || ''}</div>
         <div class="stock">${isLowStock(p) ? '⚠ ' : ''}${stockLabel}</div>
@@ -350,6 +355,7 @@ async function refreshProductsTable() {
   const body = document.getElementById('productsTableBody');
   body.innerHTML = products.map((p) => `
     <tr${isLowStock(p) ? ' style="background:#fef3c7;"' : ''}>
+      <td>${p.image_data_url ? `<img src="${p.image_data_url}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;" />` : '—'}</td>
       <td>${escapeHtml(p.name)}</td>
       <td>${escapeHtml(p.category_name || '-')}</td>
       <td>${p.price.toFixed(2)}</td>
@@ -377,6 +383,13 @@ async function refreshProductsTable() {
   });
 }
 
+function renderProductImagePreview() {
+  const box = document.getElementById('pImagePreview');
+  box.innerHTML = pendingProductImage
+    ? `<img src="${pendingProductImage}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;" />`
+    : '<span style="color:var(--text-dim);font-size:13px;">لا توجد صورة</span>';
+}
+
 function loadProductIntoForm(product) {
   editingProductId = product.id;
   document.getElementById('productFormTitle').textContent = 'تعديل: ' + product.name;
@@ -388,6 +401,9 @@ function loadProductIntoForm(product) {
   document.getElementById('pStock').value = product.stock_qty;
   document.getElementById('pTrackStock').checked = !!product.track_stock;
   document.getElementById('cancelEditBtn').style.display = 'block';
+  pendingProductImage = product.image_data_url || null;
+  document.getElementById('pImageInput').value = '';
+  renderProductImagePreview();
   document.getElementById('view-products').scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -402,9 +418,25 @@ function resetProductForm() {
   document.getElementById('pStock').value = '';
   document.getElementById('pTrackStock').checked = false;
   document.getElementById('cancelEditBtn').style.display = 'none';
+  pendingProductImage = null;
+  document.getElementById('pImageInput').value = '';
+  renderProductImagePreview();
 }
 
 function setupProductHandlers() {
+  renderProductImagePreview();
+
+  document.getElementById('pImageInput').addEventListener('change', () => {
+    const file = document.getElementById('pImageInput').files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      pendingProductImage = reader.result;
+      renderProductImagePreview();
+    };
+    reader.readAsDataURL(file);
+  });
+
   document.getElementById('saveProductBtn').addEventListener('click', async () => {
     const name = document.getElementById('pName').value.trim();
     if (!name) { alert('اسم المنتج مطلوب'); return; }
@@ -417,6 +449,7 @@ function setupProductHandlers() {
       cost: Number(document.getElementById('pCost').value) || 0,
       stock_qty: Number(document.getElementById('pStock').value) || 0,
       track_stock: document.getElementById('pTrackStock').checked,
+      image_data_url: pendingProductImage,
     });
     resetProductForm();
     products = await window.api.products.list();
