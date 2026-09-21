@@ -18,6 +18,7 @@ async function init() {
   settings = await window.api.settings.get();
 
   applyRoleVisibility();
+  renderSidebarBrand();
   renderProductGrid();
   renderCategorySelect();
   renderCart();
@@ -65,6 +66,13 @@ function applyRoleVisibility() {
   if (currentUser.role !== 'admin') {
     document.querySelectorAll('.admin-only').forEach((el) => (el.style.display = 'none'));
   }
+}
+
+function renderSidebarBrand() {
+  const box = document.getElementById('sidebarBrand');
+  box.innerHTML = settings.logo_data_url
+    ? `<img src="${settings.logo_data_url}" style="max-width:100%;height:auto;" />`
+    : `<span style="color:var(--accent);font-size:20px;font-weight:bold;">سيستم كاشير</span>`;
 }
 
 function setupNav() {
@@ -485,6 +493,7 @@ function setupSettingsHandlers() {
     await window.api.settings.save('low_stock_threshold', document.getElementById('sLowStock').value);
     settings = await window.api.settings.get();
     renderProductGrid();
+    renderSidebarBrand();
     updateLowStockBadge();
     alert('تم حفظ الإعدادات');
   });
@@ -620,6 +629,7 @@ function setupLogoHandlers() {
     if (!pendingDataUrl) { alert('اختر صورة الشعار أولاً'); return; }
     await window.api.settings.save('logo_data_url', pendingDataUrl);
     settings = await window.api.settings.get();
+    renderSidebarBrand();
     alert('تم حفظ الشعار');
   });
 }

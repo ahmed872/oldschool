@@ -13,7 +13,7 @@ function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    title: 'Smart POS',
+    title: 'سيستم كاشير',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -31,7 +31,7 @@ function createKitchenWindow() {
   kitchenWindow = new BrowserWindow({
     width: 900,
     height: 700,
-    title: 'شاشة المطبخ - Smart POS',
+    title: 'شاشة المطبخ - سيستم كاشير',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

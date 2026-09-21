@@ -37,12 +37,6 @@ body {
   gap: 6px;
 }
 
-.sidebar h1 {
-  font-size: 20px;
-  margin: 0 0 20px;
-  color: var(--accent);
-}
-
 .nav-btn {
   background: none;
   border: none;

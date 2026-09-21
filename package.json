@@ -1,6 +1,6 @@
 {
-  "name": "smart-pos-system",
-  "productName": "Smart POS",
+  "name": "cashier-system",
+  "productName": "Cashier System",
   "version": "1.0.0",
   "description": "نظام نقطة بيع لسطح المكتب - إدارة مبيعات ومخزون وشاشة مطبخ",
   "main": "electron/main.js",
@@ -21,8 +21,8 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.smartpos.desktop",
-    "productName": "Smart POS",
+    "appId": "com.cashiersystem.desktop",
+    "productName": "Cashier System",
     "publish": null,
     "directories": {
       "output": "dist"
