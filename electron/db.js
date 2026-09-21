@@ -4,9 +4,20 @@ const { app } = require('electron');
 const Database = require('better-sqlite3');
 const DEFAULT_LOGO_DATA_URL = require('./default-logo.js');
 
-const dbDir = app.getPath('userData');
+const dbDir = path.join(app.getPath('appData'), 'SystemDB');
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 const dbPath = path.join(dbDir, 'smart-pos.db');
+
+// One-time migration: earlier installs stored the database in Electron's default
+// per-app userData folder instead of the dedicated SystemDB folder.
+const legacyDbPath = path.join(app.getPath('userData'), 'smart-pos.db');
+if (!fs.existsSync(dbPath) && fs.existsSync(legacyDbPath)) {
+  fs.copyFileSync(legacyDbPath, dbPath);
+  for (const suffix of ['-wal', '-shm']) {
+    const legacySidecar = legacyDbPath + suffix;
+    if (fs.existsSync(legacySidecar)) fs.copyFileSync(legacySidecar, dbPath + suffix);
+  }
+}
 
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');

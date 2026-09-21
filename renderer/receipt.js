@@ -32,7 +32,7 @@ async function render() {
   const qrDataUrl = await window.api.print.qr(sale.sale_number);
 
   const header = settings.logo_data_url
-    ? `<div class="qr-box"><img src="${settings.logo_data_url}" style="width:auto;height:38px;" /></div>`
+    ? `<div class="qr-box"><img src="${settings.logo_data_url}" style="width:auto;height:34px;" /></div>`
     : `<h2>${escapeHtml(settings.store_name || 'المتجر')}</h2>`;
 
   container.innerHTML = `
